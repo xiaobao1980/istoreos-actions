@@ -97,3 +97,20 @@ elif [ "$1" = "rk35xx" ]; then
         CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_bdy_g18-pro=y
     " >> .config
 fi
+# ========== ROCEOS K50S (24.10) ==========
+echo -e "\\\ndefine Device/roceos_k50s
+\\\$(call Device/rk3568)
+ DEVICE_VENDOR := ROCEOS
+ DEVICE_MODEL := K50S
+ DEVICE_DTS := rk3568-roc-k50s
+ SUPPORTED_DEVICES += roceos,k50s
+ DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-hwmon-pwmfan kmod-leds-gpio kmod-r8125 kmod-brcmfmac kmod-btusb kmod-ata-ahci
+endef
+TARGET_DEVICES += roceos_k50s" >> target/linux/rockchip/image/rk35xx.mk
+
+# 复制 K50S DTS 文件
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dts target/linux/rockchip/dts/rk3568/
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dtsi target/linux/rockchip/dts/rk3568/
+
+# 复制 K50S 网口初始化脚本
+cp -f $GITHUB_WORKSPACE/configs/02_network_k50s target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
