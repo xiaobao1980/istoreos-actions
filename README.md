@@ -89,6 +89,7 @@
 | STATION-P2     | istoreos-rockchip-rk35xx-firefly_station-p2-squashfs-combined.img.gz |
 | T68M           | istoreos-rockchip-rk35xx-lyt_t68m-squashfs-combined.img.gz   |
 | XGP            | istoreos-rockchip-rk35xx-nlnet_xgp-squashfs-combined.img.gz  |
+| ROCEOS K50S | istoreos-rockchip-rk35xx-roceos_k50s-squashfs-combined.img.gz |
 
 ### x86 架构
 
