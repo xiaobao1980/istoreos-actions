@@ -92,7 +92,7 @@ elif [ "$1" = "rk35xx" ]; then
     # 22.03 旧逻辑（保留）
     sed -i "s/# CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roc_k50s is not set/CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roc_k50s=y/g" .config
     
-    # 24.10 新逻辑（新增）
+    # K50S - 24.10 (armv8)
     sed -i "s/# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s is not set/CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y/g" .config
     echo "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
     sed -i "s/# CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_ynn_ynnnas is not set/CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_ynn_ynnnas=y/g" .config
