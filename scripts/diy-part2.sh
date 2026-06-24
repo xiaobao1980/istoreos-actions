@@ -26,7 +26,7 @@
 # sed -i 's/disabled=1/disabled=0/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
 
 #添加设备
-# $GITHUB_WORKSPACE/scripts/add-device.sh
+ $GITHUB_WORKSPACE/scripts/add-device.sh
 
 # 移除ddns
 # sed -i 's/CONFIG_PACKAGE_ddns-scripts=y/CONFIG_PACKAGE_ddns-scripts=n/' .config
