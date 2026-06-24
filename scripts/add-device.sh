@@ -103,7 +103,9 @@ elif [ "$1" = "rk35xx" ]; then
         CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_bdy_g18-pro=y
     " >> .config
 fi
-# ========== ROCEOS K50S (24.10) ==========
+# ========== ROCEOS K50S (iStoreOS 24.10 / armv8) ==========
+
+# 1. 注入设备定义到 armv8.mk
 echo -e "\\\ndefine Device/roceos_k50s
 \\\$(call Device/rk3568)
  DEVICE_VENDOR := ROCEOS
@@ -112,12 +114,12 @@ echo -e "\\\ndefine Device/roceos_k50s
  SUPPORTED_DEVICES += roceos,k50s
  DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-hwmon-pwmfan kmod-leds-gpio kmod-r8125 kmod-brcmfmac kmod-btusb kmod-ata-ahci
 endef
-TARGET_DEVICES += roceos_k50s" >> target/linux/rockchip/image/rk35xx.mk
+TARGET_DEVICES += roceos_k50s" >> target/linux/rockchip/image/armv8.mk
 
-# 复制 DTS
-cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dts target/linux/rockchip/dts/rk3568/
-cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dtsi target/linux/rockchip/dts/rk3568/
+# 2. 复制 DTS 到 24.10 正确路径
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dts target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dtsi target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
 
-# 复制网口初始化
-cp -f $GITHUB_WORKSPACE/configs/02_network_k50s target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
-chmod +x target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
+# 3. 复制网口初始化脚本到 24.10 正确路径
+cp -f $GITHUB_WORKSPACE/configs/02_network_k50s target/linux/rockchip/armv8/base-files/etc/board.d/02_network
+chmod +x target/linux/rockchip/armv8/base-files/etc/board.d/02_network
