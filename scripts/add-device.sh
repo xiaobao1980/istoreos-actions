@@ -114,6 +114,10 @@ echo -e "\\\ndefine Device/roceos_k50s
 endef
 TARGET_DEVICES += roceos_k50s" >> target/linux/rockchip/image/rk35xx.mk
 
+# 复制 DTS
 cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dts target/linux/rockchip/dts/rk3568/
 cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dtsi target/linux/rockchip/dts/rk3568/
+
+# 复制网口初始化
 cp -f $GITHUB_WORKSPACE/configs/02_network_k50s target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
+chmod +x target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
