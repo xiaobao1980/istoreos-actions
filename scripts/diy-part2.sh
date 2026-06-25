@@ -26,7 +26,8 @@
 # sed -i 's/disabled=1/disabled=0/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
 
 #添加设备
- # 添加设备（取消注释）
+# 添加设备（取消注释，传入两个参数）
+chmod +x $GITHUB_WORKSPACE/scripts/add-device.sh
 $GITHUB_WORKSPACE/scripts/add-device.sh "$1" "$2"
 
 # 移除ddns
