@@ -1,112 +1,141 @@
 #!/bin/bash
+# 添加 ROCEOS K50S 设备到 iStoreOS
+# 适用：istoreos-22.03 (rk35xx) 和 istoreos-24.10 (armv8)
 
-echo -e "添加额外设备"
+set -e
 
-# ========== 原有 22.03 设备支持（保留）==========
+echo "===== 添加 ROCEOS K50S 设备支持 ====="
 
-# 加入nsy_g68-plus初始化网络配置脚本
-cp -f $GITHUB_WORKSPACE/configs/swconfig_install package/base-files/files/etc/init.d/swconfig_install 2>/dev/null || true
-chmod 755 package/base-files/files/etc/init.d/swconfig_install 2>/dev/null || true
+# 创建 DTS 目录
+mkdir -p target/linux/rockchip/dts/rk3568
+mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
 
-# 集成 nsy_g68-plus WiFi驱动
-mkdir -p package/base-files/files/lib/firmware/mediatek
-cp -f $GITHUB_WORKSPACE/configs/mt7915_eeprom.bin package/base-files/files/lib/firmware/mediatek/mt7915_eeprom.bin 2>/dev/null || true
-cp -f $GITHUB_WORKSPACE/configs/mt7916_eeprom.bin package/base-files/files/lib/firmware/mediatek/mt7916_eeprom.bin 2>/dev/null || true
-
-# 删除会导致编译失败的补丁
-rm -f target/linux/generic/hack-5.10/747-1-rtl8367b-support-rtl8367s.patch
-rm -f target/linux/generic/hack-5.10/747-2-rtl8366_smi-phy-id.patch
-rm -f target/linux/generic/hack-5.10/744-rtl8366_smi-fix-ce-debugfs.patch
-
-# 电工大佬的rtl8367b驱动资源包
-wget -q https://github.com/xiaomeng9597/files/releases/download/files/rtl8367b.tar.gz 2>/dev/null || true
-tar -xvf rtl8367b.tar.gz 2>/dev/null || true
-
-# ========== 22.03 rk35xx 逻辑（保留）==========
-
-if [ "$1" = "rk35xx" ] || [ "$2" = "rk35xx" ]; then
-    rm -f target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network
-    cp -f $GITHUB_WORKSPACE/configs/02_network target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network 2>/dev/null || true
-
-    # 增加nsy_g68-plus
-    echo -e "\\\ndefine Device/nsy_g68-plus
-\\\$(call Device/rk3568)
- DEVICE_VENDOR := NSY
- DEVICE_MODEL := G68
- DEVICE_DTS := rk3568-nsy-g68-plus
- SUPPORTED_DEVICES += nsy,g68-plus
- DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-switch-rtl8306 kmod-switch-rtl8366-smi kmod-switch-rtl8366rb kmod-switch-rtl8366s kmod-hwmon-pwmfan kmod-leds-pwm kmod-r8125 kmod-r8168 kmod-switch-rtl8367b swconfig kmod-swconfig
-endef
-TARGET_DEVICES += nsy_g68-plus" >> target/linux/rockchip/image/rk35xx.mk
-
-    # 增加nsy_g16-plus
-    echo -e "\\\ndefine Device/nsy_g16-plus
-\\\$(call Device/rk3568)
- DEVICE_VENDOR := NSY
- DEVICE_MODEL := G16
- DEVICE_DTS := rk3568-nsy-g16-plus
- SUPPORTED_DEVICES += nsy,g16-plus
- DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-switch-rtl8306 kmod-switch-rtl8366-smi kmod-switch-rtl8366rb kmod-switch-rtl8366s kmod-hwmon-pwmfan kmod-leds-pwm kmod-r8125 kmod-r8168 kmod-switch-rtl8367b swconfig kmod-swconfig
-endef
-TARGET_DEVICES += nsy_g16-plus" >> target/linux/rockchip/image/rk35xx.mk
-
-    # 增加bdy_g18-pro
-    echo -e "\\\ndefine Device/bdy_g18-pro
-\\\$(call Device/rk3568)
- DEVICE_VENDOR := BDY
- DEVICE_MODEL := G18
- DEVICE_DTS := rk3568-bdy-g18-pro
- SUPPORTED_DEVICES += bdy,g18-pro
- DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-switch-rtl8306 kmod-switch-rtl8366-smi kmod-switch-rtl8366rb kmod-switch-rtl8366s kmod-hwmon-pwmfan kmod-leds-pwm kmod-r8125 kmod-r8168 kmod-switch-rtl8367b swconfig kmod-swconfig
-endef
-TARGET_DEVICES += bdy_g18-pro" >> target/linux/rockchip/image/rk35xx.mk
-
-    # 添加dts
-    cp -f $GITHUB_WORKSPACE/configs/rk3568-nsy-g68-plus.dts target/linux/rockchip/dts/rk3568/ 2>/dev/null || true
-    cp -f $GITHUB_WORKSPACE/configs/rk3568-nsy-g16-plus.dts target/linux/rockchip/dts/rk3568/ 2>/dev/null || true
-    cp -f $GITHUB_WORKSPACE/configs/rk3568-bdy-g18-pro.dts target/linux/rockchip/dts/rk3568/ 2>/dev/null || true
-
-    # 22.03 .config
-    sed -i "s/# CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roc_k50s is not set/CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roc_k50s=y/g" .config
-    echo "
-    CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_nsy_g68-plus=y
-    CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_nsy_g16-plus=y
-    CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_bdy_g18-pro=y
-    " >> .config
+# 复制 DTS（优先使用 files 覆盖，兼容双分支）
+if [ -f "target/linux/rockchip/dts/rk3568/rk3568-roceos-k50s.dts" ]; then
+    cp -f target/linux/rockchip/dts/rk3568/rk3568-roceos-k50s.dts \
+        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+    echo "已复制 DTS 到 files 覆盖目录"
 fi
 
-# ========== 24.10 armv8 逻辑（新增 K50S）==========
+# ==========================================
+# 22.03 分支 (rk35xx)
+# ==========================================
+if [ "$1" = "istoreos-22.03" ] || [ "$2" = "rk35xx" ]; then
+    echo "检测到 22.03 / rk35xx，使用 rk35xx.mk 方式..."
 
-if [ "$1" = "istoreos-24.10" ] || [ "$2" = "rk35xx-24.10" ]; then
-    echo "========== 添加 ROCEOS K50S (24.10 / armv8) =========="
-    
-    # 1. 注入设备定义到 armv8.mk（24.10 正确路径）
-    cat >> target/linux/rockchip/image/armv8.mk << 'EOF'
+    RK35XX_MK="target/linux/rockchip/image/rk35xx.mk"
+    if [ -f "$RK35XX_MK" ]; then
+        # 检查是否已添加
+        if ! grep -q "roceos_k50s" "$RK35XX_MK"; then
+            cat >> "$RK35XX_MK" << 'EOF'
 
 define Device/roceos_k50s
-  $(call Device/rk3568)
+$(call Device/rk3568)
   DEVICE_VENDOR := ROCEOS
   DEVICE_MODEL := K50S
-  DEVICE_DTS := rk3568-roc-k50s
   SUPPORTED_DEVICES += roceos,k50s
-  DEVICE_PACKAGES := kmod-nvme kmod-scsi-core kmod-thermal kmod-hwmon-pwmfan kmod-leds-gpio kmod-r8125 kmod-brcmfmac kmod-btusb kmod-ata-ahci
+  DEVICE_PACKAGES := kmod-r8125 kmod-r8169
 endef
 TARGET_DEVICES += roceos_k50s
 EOF
+            echo "已追加到 $RK35XX_MK"
+        else
+            echo "K50S 已存在于 $RK35XX_MK，跳过"
+        fi
+    fi
 
-    # 2. 复制 DTS 到 24.10 正确路径
-    mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
-    cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dts target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/ 2>/dev/null || true
-    cp -f $GITHUB_WORKSPACE/configs/rk3568-roc-k50s.dtsi target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/ 2>/dev/null || true
+    # 02_network (22.03 路径)
+    NETWORK_FILE="target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network"
+    if [ -f "$NETWORK_FILE" ] && ! grep -q "roceos,k50s" "$NETWORK_FILE"; then
+        sed -i '/^roceos,k50s)/!{ /^esac/i\
+roceos,k50s)\
+    ucidef_set_interfaces_lan_wan "eth1 eth2 eth3 eth4" "eth0"\
+    ;;
+}' "$NETWORK_FILE"
+        echo "已注入 02_network (22.03)"
+    fi
 
-    # 3. 复制网口初始化脚本到 24.10 正确路径
-    mkdir -p target/linux/rockchip/armv8/base-files/etc/board.d/
-    cp -f $GITHUB_WORKSPACE/configs/02_network_k50s target/linux/rockchip/armv8/base-files/etc/board.d/02_network 2>/dev/null || true
-    chmod +x target/linux/rockchip/armv8/base-files/etc/board.d/02_network 2>/dev/null || true
+    # init.sh (22.03 路径)
+    INIT_FILE="target/linux/rockchip/rk35xx/base-files/lib/board/init.sh"
+    if [ -f "$INIT_FILE" ] && ! grep -q "roceos,k50s" "$INIT_FILE"; then
+        sed -i '/esac/i\
+    roceos,k50s)' "$INIT_FILE"
+        sed -i '/roceos,k50s)/a\
+        model="ROCEOS K50S"' "$INIT_FILE"
+        echo "已注入 init.sh (22.03)"
+    fi
 
-    # 4. 在 .config 中启用 K50S（24.10 armv8 格式）
-    sed -i "s/# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s is not set/CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y/g" .config
-    echo "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
-    
-    echo "K50S 设备添加完成"
+    # ota.sh (22.03 路径)
+    OTA_FILE="target/linux/rockchip/rk35xx/base-files/lib/upgrade/ota.sh"
+    if [ -f "$OTA_FILE" ] && ! grep -q "roceos,k50s" "$OTA_FILE"; then
+        sed -i '/esac/i\
+    roceos,k50s)' "$OTA_FILE"
+        sed -i '/roceos,k50s)/a\
+        export OTA_URL_BOARD="rk3568/roceos-k50s"' "$OTA_FILE"
+        echo "已注入 ota.sh (22.03)"
+    fi
+
+# ==========================================
+# 24.10 分支 (armv8)
+# ==========================================
+elif [ "$1" = "istoreos-24.10" ] || [ "$2" = "rk35xx-24.10" ]; then
+    echo "检测到 24.10 / armv8，使用 armv8.mk 方式..."
+
+    ARMV8_MK="target/linux/rockchip/image/armv8.mk"
+    if [ -f "$ARMV8_MK" ]; then
+        if ! grep -q "roceos_k50s" "$ARMV8_MK"; then
+            cat >> "$ARMV8_MK" << 'EOF'
+
+define Device/roceos_k50s
+  DEVICE_VENDOR := ROCEOS
+  DEVICE_MODEL := K50S
+  SOC := rk3568
+  UBOOT_DEVICE_NAME := generic-rk3568
+  DEVICE_PACKAGES := kmod-r8125 kmod-r8169
+  SUPPORTED_DEVICES += roceos,k50s
+endef
+TARGET_DEVICES += roceos_k50s
+EOF
+            echo "已追加到 $ARMV8_MK"
+        else
+            echo "K50S 已存在于 $ARMV8_MK，跳过"
+        fi
+    fi
+
+    # 02_network (24.10 路径：armv8 子目录)
+    NETWORK_FILE="target/linux/rockchip/armv8/base-files/etc/board.d/02_network"
+    if [ -f "$NETWORK_FILE" ] && ! grep -q "roceos,k50s" "$NETWORK_FILE"; then
+        sed -i '/^roceos,k50s)/!{ /^esac/i\
+    roceos,k50s)\
+        ucidef_set_interfaces_lan_wan "eth1 eth2 eth3 eth4" "eth0"\
+        ;;
+}' "$NETWORK_FILE"
+        echo "已注入 02_network (24.10)"
+    fi
+
+    # init.sh (24.10 路径：armv8 子目录)
+    INIT_FILE="target/linux/rockchip/armv8/base-files/lib/board/init.sh"
+    if [ -f "$INIT_FILE" ] && ! grep -q "roceos,k50s" "$INIT_FILE"; then
+        sed -i '/esac/i\
+    roceos,k50s)' "$INIT_FILE"
+        sed -i '/roceos,k50s)/a\
+        model="ROCEOS K50S"' "$INIT_FILE"
+        echo "已注入 init.sh (24.10)"
+    fi
+
+    # ota.sh (24.10 路径：armv8 子目录)
+    OTA_FILE="target/linux/rockchip/armv8/base-files/lib/upgrade/ota.sh"
+    if [ -f "$OTA_FILE" ] && ! grep -q "roceos,k50s" "$OTA_FILE"; then
+        sed -i '/esac/i\
+    roceos,k50s)' "$OTA_FILE"
+        sed -i '/roceos,k50s)/a\
+        export OTA_URL_BOARD="rk3568/roceos-k50s"' "$OTA_FILE"
+        echo "已注入 ota.sh (24.10)"
+    fi
+
+else
+    echo "警告：未匹配到已知分支 ($1 / $2)，跳过设备添加"
+    exit 0
 fi
+
+echo "===== ROCEOS K50S 设备添加完成 ====="
