@@ -14,6 +14,8 @@ mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
 if [ -f "target/linux/rockchip/dts/rk3568/rk3568-roceos-k50s.dts" ]; then
     cp -f target/linux/rockchip/dts/rk3568/rk3568-roceos-k50s.dts \
         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+    cp -f target/linux/rockchip/dts/rk3568/rk3568-roceos-k50s.dtsi \
+        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
     echo "已复制 DTS 到 files 覆盖目录"
 fi
 
@@ -25,7 +27,6 @@ if [ "$1" = "istoreos-22.03" ] || [ "$2" = "rk35xx" ]; then
 
     RK35XX_MK="target/linux/rockchip/image/rk35xx.mk"
     if [ -f "$RK35XX_MK" ]; then
-        # 检查是否已添加
         if ! grep -q "roceos_k50s" "$RK35XX_MK"; then
             cat >> "$RK35XX_MK" << 'EOF'
 
@@ -47,11 +48,10 @@ EOF
     # 02_network (22.03 路径)
     NETWORK_FILE="target/linux/rockchip/rk35xx/base-files/etc/board.d/02_network"
     if [ -f "$NETWORK_FILE" ] && ! grep -q "roceos,k50s" "$NETWORK_FILE"; then
-        sed -i '/^roceos,k50s)/!{ /^esac/i\
-roceos,k50s)\
-    ucidef_set_interfaces_lan_wan "eth1 eth2 eth3 eth4" "eth0"\
-    ;;
-}' "$NETWORK_FILE"
+        sed -i '/^esac/i\
+    roceos,k50s)\
+        ucidef_set_interfaces_lan_wan "eth1 eth2 eth3 eth4" "eth0"\
+        ;;' "$NETWORK_FILE"
         echo "已注入 02_network (22.03)"
     fi
 
@@ -105,11 +105,10 @@ EOF
     # 02_network (24.10 路径：armv8 子目录)
     NETWORK_FILE="target/linux/rockchip/armv8/base-files/etc/board.d/02_network"
     if [ -f "$NETWORK_FILE" ] && ! grep -q "roceos,k50s" "$NETWORK_FILE"; then
-        sed -i '/^roceos,k50s)/!{ /^esac/i\
+        sed -i '/^esac/i\
     roceos,k50s)\
         ucidef_set_interfaces_lan_wan "eth1 eth2 eth3 eth4" "eth0"\
-        ;;
-}' "$NETWORK_FILE"
+        ;;' "$NETWORK_FILE"
         echo "已注入 02_network (24.10)"
     fi
 
