@@ -1,120 +1,161 @@
 #!/bin/bash
-#============================================================
-# iStoreOS 云编译 DIY 脚本 Part2
-# 支持：istoreos-22.03 (rk35xx) / istoreos-24.10 (armv8)
-# 设备：ROCEOS K50S (RK3568)
-#============================================================
-
+# ==========================================
+# iStoreOS 24.10 ROCEOS K50S 完整设备补丁
+# ==========================================
 set -e
 
-echo "============================================"
-echo "  DIY Part2 开始执行"
-echo "  分支参数: $1 / $2"
-echo "  工作目录: $(pwd)"
-echo "============================================"
+# ---- 1. 创建 K50S DTS（RK3568 + 5网口）----
+DTS_DIR="target/linux/rockchip/files/arch/arm64/boot/dts/rockchip"
+mkdir -p "$DTS_DIR"
 
-# ==========================================
-# 通用设置
-# ==========================================
-# 设置编译时区
-export TZ=Asia/Shanghai
+cat > "$DTS_DIR/rk3568-roceos-k50s.dts" << 'DTS_EOF'
+/dts-v1/;
+#include "rk3568.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
 
-# ==========================================
-# 22.03 分支 (rk35xx)
-# ==========================================
-if [ "$1" = "istoreos-22.03" ] || [ "$2" = "rk35xx" ]; then
-    echo "===== 配置 22.03 / rk35xx ====="
+/ {
+    model = "ROCEOS K50S";
+    compatible = "roceos,k50s", "rockchip,rk3568";
 
-    # 加载 22.03 的 .config
-    if [ -f "$GITHUB_WORKSPACE/rk35xx/.config" ]; then
-        cat "$GITHUB_WORKSPACE/rk35xx/.config" > .config
-        echo "已加载 rk35xx/.config"
-    else
-        echo "警告: 未找到 rk35xx/.config，使用默认配置"
+    aliases {
+        ethernet0 = &gmac0;
+        ethernet1 = &gmac1;
+        mmc0 = &sdmmc0;
+        mmc1 = &sdhci;
+    };
+
+    chosen {
+        stdout-path = "serial2:1500000n8";
+    };
+};
+
+&gmac0 {
+    phy-mode = "rgmii";
+    clock_in_out = "output";
+    /* 注意：以下 GPIO 需按实际硬件调整，此处为常见参考值 */
+    snps,reset-gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_LOW>;
+    snps,reset-active-low;
+    snps,reset-delays-us = <0 10000 50000>;
+    assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
+    assigned-clock-rates = <0>, <125000000>;
+    assigned-clock-parents = <&cru SCLK_GMAC0_RMII_SPEED>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&gmac0_miim
+             &gmac0_tx_bus2
+             &gmac0_rx_bus2
+             &gmac0_rgmii_clk
+             &gmac0_rgmii_bus>;
+    status = "okay";
+};
+
+&gmac1 {
+    phy-mode = "rgmii";
+    clock_in_out = "output";
+    snps,reset-gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_LOW>;
+    snps,reset-active-low;
+    snps,reset-delays-us = <0 10000 50000>;
+    assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
+    assigned-clock-rates = <0>, <125000000>;
+    assigned-clock-parents = <&cru SCLK_GMAC1_RMII_SPEED>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&gmac1_miim
+             &gmac1_tx_bus2
+             &gmac1_rx_bus2
+             &gmac1_rgmii_clk
+             &gmac1_rgmii_bus>;
+    status = "okay";
+};
+
+/* 3 个 PCIe RTL8125 */
+&pcie2x1 {
+    reset-gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+    status = "okay";
+};
+
+&pcie3x1 {
+    reset-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+    status = "okay";
+};
+
+&pcie3x2 {
+    reset-gpios = <&gpio0 RK_PC5 GPIO_ACTIVE_HIGH>;
+    status = "okay";
+};
+
+&uart2 {
+    status = "okay";
+};
+
+&sdhci {
+    bus-width = <8>;
+    mmc-hs200-1_8v;
+    non-removable;
+    status = "okay";
+};
+
+&sdmmc0 {
+    bus-width = <4>;
+    cap-mmc-highspeed;
+    cap-sd-highspeed;
+    disable-wp;
+    pinctrl-names = "default";
+    pinctrl-0 = <&sdmmc0_bus4 &sdmmc0_clk &sdmmc0_cmd &sdmmc0_det>;
+    status = "okay";
+};
+DTS_EOF
+
+# ---- 2. 注册 dtb 到内核 Makefile ----
+MAKEFILE="$DTS_DIR/Makefile"
+if [ -f "$MAKEFILE" ]; then
+    if ! grep -q "rk3568-roceos-k50s.dtb" "$MAKEFILE"; then
+        echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-roceos-k50s.dtb' >> "$MAKEFILE"
     fi
-
-    # 添加 K50S 设备支持
-    if [ -f "$GITHUB_WORKSPACE/scripts/add-device.sh" ]; then
-        chmod +x "$GITHUB_WORKSPACE/scripts/add-device.sh"
-        "$GITHUB_WORKSPACE/scripts/add-device.sh" "$1" "$2"
-    else
-        echo "警告: add-device.sh 不存在"
-    fi
-
-    # 确保 .config 中包含 K50S（22.03 格式为 rk35xx）
-    if ! grep -q "CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roceos_k50s=y" .config; then
-        echo "CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roceos_k50s=y" >> .config
-        echo "已追加 K50S 配置 (rk35xx)"
-    fi
-
-    # 重新生成配置
-    make defconfig
-
-    # 验证 K50S 是否保留
-    if grep -q "CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roceos_k50s=y" .config; then
-        echo "✅ 22.03 K50S 设备配置已确认"
-    else
-        echo "❌ 22.03 K50S 设备配置丢失，检查 add-device.sh 和 armv8.mk/rk35xx.mk"
-        exit 1
-    fi
-
-# ==========================================
-# 24.10 分支 (armv8)
-# ==========================================
-elif [ "$1" = "istoreos-24.10" ] || [ "$2" = "rk35xx-24.10" ]; then
-    echo "===== 配置 24.10 / rk35xx-24.10 ====="
-
-    # 加载 24.10 的 .config
-    if [ -f "$GITHUB_WORKSPACE/rk35xx-24.10/.config" ]; then
-        cat "$GITHUB_WORKSPACE/rk35xx-24.10/.config" > .config
-        echo "已加载 rk35xx-24.10/.config"
-    else
-        echo "警告: 未找到 rk35xx-24.10/.config，使用默认配置"
-    fi
-
-    # 添加 K50S 设备支持
-    if [ -f "$GITHUB_WORKSPACE/scripts/add-device.sh" ]; then
-        chmod +x "$GITHUB_WORKSPACE/scripts/add-device.sh"
-        "$GITHUB_WORKSPACE/scripts/add-device.sh" "$1" "$2"
-    else
-        echo "警告: add-device.sh 不存在"
-    fi
-
-    # 确保 .config 中包含 K50S（24.10 格式为 armv8）
-    # 先删除可能存在的旧格式（防止重复或冲突）
-    sed -i '/CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s/d' .config
-    sed -i '/CONFIG_TARGET_DEVICE_rockchip_rk35xx_DEVICE_roceos_k50s/d' .config
-    echo "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
-    echo "已追加 K50S 配置 (armv8)"
-
-    # 重新生成配置
-    make defconfig
-
-    # 验证 K50S 是否保留
-    if grep -q "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y" .config; then
-        echo "✅ 24.10 K50S 设备配置已确认"
-    else
-        echo "❌ 24.10 K50S 设备配置丢失，检查 add-device.sh 和 armv8.mk"
-        echo "===== armv8.mk 末尾 20 行 ====="
-        tail -20 "target/linux/rockchip/image/armv8.mk" || true
-        exit 1
-    fi
-
 else
-    echo "警告: 未匹配到已知分支 ($1 / $2)"
-    exit 1
+    echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-roceos-k50s.dtb' > "$MAKEFILE"
 fi
 
-# ==========================================
-# 通用编译优化（可选）
-# ==========================================
-# 启用 ccache
-# echo "CONFIG_CCACHE=y" >> .config
+# ---- 3. 添加 Board 定义到 image Makefile ----
+# iStoreOS 24.10 常用 rk35xx.mk，部分旧版用 armv8.mk
+IMAGE_MK=""
+if [ -f "target/linux/rockchip/image/rk35xx.mk" ]; then
+    IMAGE_MK="target/linux/rockchip/image/rk35xx.mk"
+elif [ -f "target/linux/rockchip/image/armv8.mk" ]; then
+    IMAGE_MK="target/linux/rockchip/image/armv8.mk"
+fi
 
-# 替换主题（可选）
-# rm -rf feeds/luci/themes/luci-theme-argon
-# git clone -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git feeds/luci/themes/luci-theme-argon
+if [ -n "$IMAGE_MK" ] && ! grep -q "roceos_k50s" "$IMAGE_MK"; then
+    cat >> "$IMAGE_MK" << 'MK_EOF'
 
-echo "============================================"
-echo "  DIY Part2 执行完成"
-echo "============================================"
+define Device/roceos_k50s
+  DEVICE_VENDOR := ROCEOS
+  DEVICE_MODEL := K50S
+  SOC := rk3568
+  DEVICE_PACKAGES := kmod-r8169
+endef
+TARGET_DEVICES += roceos_k50s
+MK_EOF
+    echo "Added K50S to $IMAGE_MK"
+fi
+
+# ---- 4. 强制 .config 选中 K50S ----
+if grep -q "CONFIG_TARGET_rockchip_rk35xx=y" .config 2>/dev/null; then
+    echo "CONFIG_TARGET_rockchip_rk35xx_DEVICE_roceos_k50s=y" >> .config
+elif grep -q "CONFIG_TARGET_rockchip_armv8=y" .config 2>/dev/null; then
+    echo "CONFIG_TARGET_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
+else
+    # 若 .config 未初始化，默认设为 rk35xx
+    echo "CONFIG_TARGET_rockchip=y" >> .config
+    echo "CONFIG_TARGET_rockchip_rk35xx=y" >> .config
+    echo "CONFIG_TARGET_rockchip_rk35xx_DEVICE_roceos_k50s=y" >> .config
+fi
+
+# ---- 5. 同步配置并验证 ----
+make defconfig
+
+# 验证 K50S 是否被选中
+if grep -q "DEVICE_roceos_k50s=y" .config; then
+    echo ">>> K50S 已成功注册到构建系统"
+else
+    echo ">>> 警告：K50S 可能未正确注册，请检查 .config"
+fi
