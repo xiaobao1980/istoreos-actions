@@ -1,14 +1,43 @@
 #!/bin/bash
-# ============================================================
-# iStoreOS 24.10 rk35xx-24.10 - ROCEOS K50S 设备注册
-# ============================================================
+# ==========================================
+# iStoreOS 24.10 云编译 - ROCEOS K50S 自定义脚本
+# 修复：DTS 路径 + CONFIG_TARGET_DEVICE_ 前缀
+# ==========================================
 
-set -e
 cd openwrt
 
-echo "==================== 1. 添加 K50S 到 legacy.mk ===================="
-if ! grep -q "roceos_k50s" target/linux/rockchip/image/legacy.mk; then
-    cat >> target/linux/rockchip/image/legacy.mk << 'EOF'
+# ==========================================
+# 1. 添加自定义 feeds（可选，如需添加额外软件源）
+# ==========================================
+# echo "src-git custom https://github.com/xxx/xxx.git" >> feeds.conf.default
+
+# ==========================================
+# 2. 修复 feeds install 依赖警告
+# ==========================================
+# 这些警告不影响编译，但可以通过以下方式静默：
+# 确保 feeds 中已包含所需包
+
+# ==========================================
+# 3. 添加 ROCEOS K50S 设备支持
+# ==========================================
+echo "===== 添加 ROCEOS K50S 设备支持 ====="
+
+# 复制 DTS 文件到内核源码目录（修复路径：添加 configs/ 前缀）
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roceos-k50s.dts target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+cp -f $GITHUB_WORKSPACE/configs/rk3568-roceos-k50s.dtsi target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+
+# 注册 DTS 到内核 Makefile（避免重复添加）
+if ! grep -q "rk3568-roceos-k50s.dts" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/Makefile 2>/dev/null; then
+    echo "dtb-\$(CONFIG_ARCH_ROCKCHIP) += rk3568-roceos-k50s.dtb" >> target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/Makefile
+    echo "已添加 rk3568-roceos-k50s.dtb 到 Makefile"
+else
+    echo "rk3568-roceos-k50s.dtb 已存在于 Makefile，跳过"
+fi
+
+# 添加设备定义到 legacy.mk（24.10 使用 legacy.mk 而非 armv8.mk）
+LEGACY_MK="target/linux/rockchip/image/legacy.mk"
+if ! grep -q "roceos_k50s" "$LEGACY_MK" 2>/dev/null; then
+cat >> "$LEGACY_MK" << 'EOF'
 
 define Device/roceos_k50s
 $(call Device/Legacy/rk3568,$(1))
@@ -19,70 +48,41 @@ $(call Device/Legacy/rk3568,$(1))
 endef
 TARGET_DEVICES += roceos_k50s
 EOF
-    echo "✓ K50S 已添加到 legacy.mk"
+    echo "已添加 roceos_k50s 到 legacy.mk"
 else
-    echo "✓ K50S 已存在于 legacy.mk"
+    echo "roceos_k50s 已存在于 legacy.mk，跳过"
 fi
 
-echo "==================== 2. 复制 DTS 到内核目录 ===================="
-mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
-cp -v $GITHUB_WORKSPACE/rk3568-roceos-k50s.dts target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/ 2>/dev/null || true
-cp -v $GITHUB_WORKSPACE/rk3568-roceos-k50s.dtsi target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/ 2>/dev/null || true
+# 复制网口映射脚本
+if [ -f "$GITHUB_WORKSPACE/configs/02_network_k50s" ]; then
+    cp -f $GITHUB_WORKSPACE/configs/02_network_k50s package/base-files/files/etc/board.d/02_network
+    chmod +x package/base-files/files/etc/board.d/02_network
+    echo "已复制 02_network_k50s"
+else
+    echo "警告：configs/02_network_k50s 不存在，跳过网口映射"
+fi
 
-echo "==================== 3. 打 Patch 注册 DTS 到内核 Makefile ===================="
-# 注：build_dir 中的内核目录此时通常还未生成，直接修改源码树无效。
-# 通过 target/linux/rockchip/patches-6.6/ 下的 patch，OpenWrt 会在内核解压后自动应用。
-mkdir -p target/linux/rockchip/patches-6.6
-cat > target/linux/rockchip/patches-6.6/999-roceos-k50s-dtb.patch << 'PATCH_EOF'
---- a/arch/arm64/boot/dts/rockchip/Makefile
-+++ b/arch/arm64/boot/dts/rockchip/Makefile
-@@ -70,6 +70,7 @@ dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-nanopi-r5c.dtb
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-nanopi-r5s.dtb
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-odroid-m1.dtb
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-panther-x2.dtb
-+dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-roceos-k50s.dtb
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-roc-pc.dtb
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-rock-3a.dtb
-PATCH_EOF
-echo "✓ 已创建 DTS Makefile patch"
+# ==========================================
+# 4. 注入 K50S 目标配置（修复：使用 CONFIG_TARGET_DEVICE_ 前缀）
+# ==========================================
+echo "===== 注入 K50S 目标配置 ====="
 
-echo "==================== 4. 添加 board 网口映射 ===================="
-mkdir -p target/linux/rockchip/armv8/base-files/etc/board.d
-cat > target/linux/rockchip/armv8/base-files/etc/board.d/02_network << 'EOF'
-#!/bin/sh
-
-. /lib/functions/uci-defaults.sh
-
-board_config_update
-
-case $(board_name) in
-roceos,k50s)
-	ucidef_set_interfaces_lan_wan "eth0 eth1 eth2 eth3" "eth4"
-	;;
-esac
-
-board_config_flush
-
-exit 0
-EOF
-chmod +x target/linux/rockchip/armv8/base-files/etc/board.d/02_network
-echo "✓ 02_network 已创建"
-
-echo "==================== 5. 锁定 K50S 目标配置 ===================="
+# 确保目标架构配置正确
 echo "CONFIG_TARGET_rockchip=y" >> .config
 echo "CONFIG_TARGET_rockchip_armv8=y" >> .config
-echo "CONFIG_TARGET_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
 
-echo "==================== 6. 运行 make defconfig ===================="
-make defconfig
+# 关键修复：使用 CONFIG_TARGET_DEVICE_ 前缀（而非 CONFIG_TARGET_）
+echo "CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_roceos_k50s=y" >> .config
 
-echo "==================== 7. 验证 ===================="
-echo "--- legacy.mk 中的 K50S ---"
-grep -A 8 "roceos_k50s" target/linux/rockchip/image/legacy.mk || echo "ERROR: 未找到"
-echo "--- .config 中的 K50S ---"
-grep "roceos_k50s" .config || echo "ERROR: CONFIG 未找到"
-echo "--- DTS 文件 ---"
-ls -la target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-roceos* 2>/dev/null || echo "ERROR: DTS 未找到"
-echo "--- Patch 文件 ---"
-ls -la target/linux/rockchip/patches-6.6/999-roceos-k50s-dtb.patch 2>/dev/null || echo "ERROR: Patch 未找到"
-echo "==================== 完成 ===================="
+# 如果不需要编译其他设备，可以注释掉下面这行以节省编译时间
+# echo "CONFIG_TARGET_ALL_PROFILES=y" >> .config
+
+echo "===== K50S 配置注入完成 ====="
+
+# ==========================================
+# 5. 其他自定义修改（可选）
+# ==========================================
+# 例如：修改默认 IP、添加软件包等
+# sed -i 's/192.168.1.1/192.168.50.1/g' package/base-files/files/bin/config_generate
+
+echo "==================== diy-part2.sh 完成 ===================="
